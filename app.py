@@ -163,12 +163,12 @@ with st.form("main_form"):
 
         ph1_radius = st.slider(
             "Phase 1 — Core radius (miles)",
-            min_value=5, max_value=100, value=25, step=5,
+            min_value=5, max_value=300, value=25, step=5,
             help="Primary coverage area, typically 10–30 miles from the office."
         )
         ph2_radius = st.number_input(
             "Phase 2 — Expansion radius (miles, 0 = skip)",
-            min_value=0, max_value=200, value=0, step=5,
+            min_value=0, max_value=300, value=0, step=5,
             help="Secondary ring. Set to 0 to run Phase 1 only."
         )
         ph3_radius = st.number_input(
