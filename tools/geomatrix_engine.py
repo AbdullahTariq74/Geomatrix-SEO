@@ -402,11 +402,11 @@ Rules:
     def find_locations(self, lat: float, lon: float, city: str, state: str, radius_miles: int) -> list:
         phase_structure = self._get_phase_structure(radius_miles)
         if radius_miles <= 25:
-            max_locs = 30
+            max_locs = 80
         elif radius_miles <= 50:
-            max_locs = 45
+            max_locs = 150
         else:
-            max_locs = 65
+            max_locs = 200
 
         prompt = f"""List exactly {max_locs} real cities, towns, and suburbs within {radius_miles} miles of {city}, {state}.
 
@@ -487,7 +487,7 @@ Rules:
             if custom:
                 locs = self._find_custom_locations(lat, lon, city, state, phase, mtype, custom)
             else:
-                n = 30 if i == 0 else (20 if i == 1 else 15)
+                n = 80 if i == 0 else (120 if i == 1 else 150)
                 locs = self._find_ring_locations(
                     lat, lon, city, state, phase, mtype, prev_radius, radius, n, all_locs
                 )
@@ -531,10 +531,10 @@ Rules: real named places, real GPS coords, sorted by distance ascending, within 
 
     def _find_custom_locations(self, lat, lon, city, state, phase, market_type, custom_desc):
         prompt = f"""A business is based in {city}, {state}.
-List up to 20 real, specific locations matching: "{custom_desc}"
+List up to 50 real, specific locations matching: "{custom_desc}"
 Assign phase="{phase}", market_type="{market_type}".
 
-Return ONLY a valid JSON array (up to 20 objects):
+Return ONLY a valid JSON array (up to 50 objects):
 [{{"name":"Location","distance_miles":45.0,"market_type":"{market_type}","phase":"{phase}","lat":40.0,"lon":-73.0}}]
 
 Rules: real named places only, accurate GPS coordinates, realistic distance from {city} {state}."""
@@ -542,7 +542,7 @@ Rules: real named places only, accurate GPS coordinates, realistic distance from
         try:
             data = self._extract_json(self._call_claude(prompt, max_tokens=4096), "array")
             if data and isinstance(data, list):
-                return data[:20]
+                return data[:50]
         except Exception:
             pass
         return []

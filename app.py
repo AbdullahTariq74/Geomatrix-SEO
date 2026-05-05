@@ -161,6 +161,7 @@ with st.form("main_form"):
     with col2:
         st.markdown("**Phase Configuration**")
 
+        st.markdown("<div style='margin-bottom:8px;'><b>Core & Expansion Zones</b></div>", unsafe_allow_html=True)
         ph1_radius = st.slider(
             "Phase 1 — Core radius (miles)",
             min_value=5, max_value=300, value=25, step=5,
@@ -168,17 +169,19 @@ with st.form("main_form"):
         )
         ph2_radius = st.number_input(
             "Phase 2 — Expansion radius (miles, 0 = skip)",
-            min_value=0, max_value=300, value=0, step=5,
-            help="Secondary ring. Set to 0 to run Phase 1 only."
+            min_value=0, max_value=1000, value=0, step=10,
+            help="Secondary ring. Set to 0 to skip."
         )
+        
+        st.markdown("<div style='margin-top:12px; margin-bottom:8px;'><b>National / Extended Scale</b></div>", unsafe_allow_html=True)
         ph3_radius = st.number_input(
             "Phase 3 — Extended radius (miles, 0 = skip)",
-            min_value=0, max_value=300, value=0, step=5,
-            help="Outermost ring. Leave 0 if using a custom area description below."
+            min_value=0, max_value=4000, value=0, step=50,
+            help="Outermost ring. E.g., 4000 for full US coverage."
         )
         ph3_custom = st.text_input(
             "Phase 3 — Custom area (overrides radius if filled)",
-            placeholder="e.g. High-income Hamptons area, NY  |  Westchester County, NY",
+            placeholder="e.g. Major US Cities | Nationwide",
             help="Describe a specific geographic area for Phase 3 — AI will find real locations matching it."
         )
 
@@ -228,6 +231,20 @@ if submitted:
         for e in errors:
             st.error(e)
         st.stop()
+
+    # Radius Validation Checks
+    if ph2_radius > 0 and ph2_radius <= ph1_radius:
+        st.error("⚠️ Phase 2 radius must be greater than Phase 1 radius.")
+        st.stop()
+    if _ph3_r > 0 and ph2_radius > 0 and _ph3_r <= ph2_radius:
+        st.error("⚠️ Phase 3 radius must be greater than Phase 2 radius.")
+        st.stop()
+    if _ph3_r > 0 and ph2_radius == 0 and _ph3_r <= ph1_radius:
+        st.error("⚠️ Phase 3 radius must be greater than Phase 1 radius.")
+        st.stop()
+    
+    if _ph3_r > 1000:
+        st.warning("🌍 **Nationwide Scale Detected:** A radius over 1,000 miles will capture a massive amount of data. Generation may take up to 2 minutes.")
 
     from geomatrix_engine import GeomatrixEngine
     engine   = GeomatrixEngine(CLAUDE_API_KEY)
