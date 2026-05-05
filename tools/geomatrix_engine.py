@@ -402,11 +402,11 @@ Rules:
     def find_locations(self, lat: float, lon: float, city: str, state: str, radius_miles: int) -> list:
         phase_structure = self._get_phase_structure(radius_miles)
         if radius_miles <= 25:
-            max_locs = 80
+            max_locs = min(40, max(20, int(radius_miles * 0.5)))
         elif radius_miles <= 50:
-            max_locs = 150
+            max_locs = min(80, max(40, int(radius_miles * 0.2)))
         else:
-            max_locs = 200
+            max_locs = min(250, max(80, int(radius_miles * 0.1)))
 
         prompt = f"""List exactly {max_locs} real cities, towns, and suburbs within {radius_miles} miles of {city}, {state}.
 
@@ -487,7 +487,13 @@ Rules:
             if custom:
                 locs = self._find_custom_locations(lat, lon, city, state, phase, mtype, custom)
             else:
-                n = 80 if i == 0 else (120 if i == 1 else 150)
+                if i == 0:
+                    n = min(40, max(20, int((radius or 0) * 0.5)))
+                elif i == 1:
+                    n = min(80, max(40, int((radius or 0) * 0.2)))
+                else:
+                    n = min(250, max(80, int((radius or 0) * 0.1)))
+                
                 locs = self._find_ring_locations(
                     lat, lon, city, state, phase, mtype, prev_radius, radius, n, all_locs
                 )
