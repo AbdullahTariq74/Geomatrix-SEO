@@ -449,6 +449,19 @@ Rules:
                 
         return None, None
 
+    def reverse_geocode(self, lat: float, lon: float) -> tuple:
+        """Find city and state names from coordinates."""
+        try:
+            loc = self.geocoder.reverse((lat, lon), language="en")
+            if loc and loc.raw.get("address"):
+                addr = loc.raw["address"]
+                city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("suburb", "Unknown")
+                state = addr.get("state", "Unknown")
+                return city, state
+        except Exception:
+            pass
+        return "Unknown", "Unknown"
+
     # ─── Step 5: Find locations ───────────────────────────────────────────────
 
     def find_locations(self, lat: float, lon: float, city: str, state: str, radius_miles: int) -> list:
@@ -526,6 +539,12 @@ Rules:
                                   city: str, state: str,
                                   phase_configs: list) -> list:
         """Build the full location list from per-phase configuration."""
+        # Self-heal if city/state is missing (likely due to scraper blocking)
+        if (not city or city == "Unknown") and lat and lon:
+            city_rev, state_rev = self.reverse_geocode(lat, lon)
+            city = city if city and city != "Unknown" else city_rev
+            state = state if state and state != "Unknown" else state_rev
+
         all_locs: list = []
         seen: set = set()
         prev_radius = 0
