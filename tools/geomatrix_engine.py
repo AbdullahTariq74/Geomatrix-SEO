@@ -250,6 +250,9 @@ class GeomatrixEngine:
             return f"[Scrape note: {e}]"
 
         home_text = self._fetch_page(url, headers)
+        print(f"[Debug] Homepage scraped: {len(home_text)} chars")
+        if len(home_text) < 300:
+            print("[Debug] Warning: Scraped content is very short. Website may be JS-heavy or blocking requests.")
 
         # 2. Discover and scrape service sub-pages
         sub_links = self._discover_service_links(url, home_html, limit=6)
@@ -272,24 +275,28 @@ class GeomatrixEngine:
 
     def extract_business_info(self, content: str, business_name: str,
                               website: str, extra_info: str = "") -> dict:
+        self.last_biz_name = business_name
+        self.last_website = website
+        
         extra_section = (
-            f"\n\nADDITIONAL DETAILS PROVIDED BY THE BUSINESS OWNER (treat as authoritative):\n{extra_info}"
+            f"\n\nADDITIONAL DETAILS PROVIDED BY THE USER (treat as authoritative source for location/services):\n{extra_info}"
             if extra_info and extra_info.strip() else ""
         )
         prompt = f"""Analyze this website content for "{business_name}" (website: {website}).{extra_section}
 
+CRITICAL: You MUST find the physical address (Street, City, State). If the exact street is missing, find the City and State. Check the bottom of the text (footer) and contact mentions.
+
 Return ONLY valid JSON (no markdown, no explanation).
-The "services" field must list EVERY specific service/treatment found ANYWHERE in the content AND in any additional details above — be maximally granular, Title Case, 15-25 items:
 {{
-    "address": "full address with street, city, state, zip if available",
-    "city": "city name",
-    "state": "full state name",
-    "state_abbr": "2-letter abbreviation e.g. NY",
+    "address": "full street address or 'Unknown'",
+    "city": "city name or 'Unknown'",
+    "state": "full state name or 'Unknown'",
+    "state_abbr": "2-letter abbreviation or 'XX'",
     "zip": "zip code or empty",
-    "description": "2-3 sentence business description incorporating any extra details",
+    "description": "2-3 sentence business description",
     "phone": "phone number or empty",
-    "industry": "e.g. Cosmetic Dentistry, Plumbing, HVAC, Legal Services",
-    "services": ["Every Specific Service Name", "Another Service", "..."]
+    "industry": "e.g. Cosmetic Dentistry, Plumbing, etc.",
+    "services": ["Service 1", "Service 2", "... 15-25 specific items"]
 }}
 
 Website content:
@@ -302,7 +309,7 @@ Website content:
         except Exception:
             pass
         return {
-            "address": business_name, "city": "Unknown", "state": "Unknown",
+            "address": "Unknown", "city": "Unknown", "state": "Unknown",
             "state_abbr": "XX", "zip": "",
             "description": f"{business_name} provides professional services.",
             "phone": "", "industry": "Professional Services",
@@ -386,7 +393,8 @@ Rules:
     # ─── Step 4: Geocode ─────────────────────────────────────────────────────
 
     def _geocode_via_claude(self, query: str) -> tuple:
-        prompt = f"Return the approximate latitude and longitude of '{query}' as a JSON object with keys 'lat' and 'lon'. Return ONLY valid JSON (no markdown)."
+        ctx = f"The business is '{getattr(self, 'last_biz_name', 'Unknown')}' and their website is '{getattr(self, 'last_website', 'Unknown')}'. "
+        prompt = f"{ctx}Find the approximate latitude and longitude for their location based on the query '{query}'. If the query is empty or 'Unknown', use your knowledge of this business's headquarters. Return ONLY a JSON object with keys 'lat' and 'lon'. No markdown."
         try:
             data = self._extract_json(self._call_claude(prompt, max_tokens=150), "object")
             if data and "lat" in data and "lon" in data:
@@ -400,8 +408,12 @@ Rules:
         state = (state or "").strip()
         address = (address or "").strip()
         
+        if city == "Unknown" and state == "Unknown" and address == "Unknown":
+            # Total extraction failure, try fallback immediately with context
+            return self._geocode_via_claude("")
+
         attempts = []
-        if address and city and state:
+        if address and address != "Unknown" and city and city != "Unknown":
             attempts.append(f"{address}, {city}, {state}")
             
         if city and state:
