@@ -153,24 +153,44 @@ class GeomatrixEngine:
                 raise
         return ""
 
-    def _extract_json(self, text: str, kind: str = "object"):
-        # Try fenced code blocks first
-        for pattern in [r'```json\s*(.*?)\s*```', r'```\s*(.*?)\s*```']:
-            m = re.search(pattern, text, re.DOTALL)
-            if m:
-                try:
-                    return json.loads(m.group(1))
-                except Exception:
-                    pass
-        # Raw JSON
-        bracket = r'\[.*\]' if kind == "array" else r'\{.*\}'
-        m = re.search(bracket, text, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group())
-            except Exception:
-                pass
-        return None
+    def _extract_json(self, text: str, expected_type: str = "object"):
+        """Extract and repair JSON from AI response."""
+        if not text: return None
+        import re, json
+        
+        # 1. Try to find JSON block
+        if expected_type == "array":
+            pattern = r'\[\s*\{.*\}\s*\]'
+        else:
+            pattern = r'\{\s*".*":.*\}'
+            
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            clean_text = match.group(0)
+        else:
+            # Fallback: find first [ or { and last ] or }
+            start = text.find('[' if expected_type == "array" else '{')
+            end = text.rfind(']' if expected_type == "array" else '}')
+            if start != -1 and end != -1:
+                clean_text = text[start:end+1]
+            else:
+                clean_text = text
+
+        # 2. Basic cleanup
+        clean_text = clean_text.strip().replace("```json", "").replace("```", "")
+        
+        # 3. Attempt parse
+        try:
+            return json.loads(clean_text)
+        except json.JSONDecodeError:
+            # 4. Attempt simple repair for truncated arrays
+            if expected_type == "array" and clean_text.startswith("["):
+                last_obj_end = clean_text.rfind("}")
+                if last_obj_end != -1:
+                    repaired = clean_text[:last_obj_end+1] + "]"
+                    try: return json.loads(repaired)
+                    except: pass
+            return None
 
     def _detect_industry(self, industry_text: str) -> str:
         t = industry_text.lower()
@@ -595,18 +615,31 @@ Rules:
         excl_str   = (f"\nExclude (already in earlier phase): {', '.join(exclude[:25])}"
                       if exclude else "")
 
-        prompt = f"""List exactly {n_locs} real cities/towns/suburbs {ring_desc}.
-Assign phase="{phase}", market_type="{market_type}". {first_rule}.{excl_str}
+        prompt = f"""List {n_locs} cities/towns {ring_desc}.
+Phase: "{phase}", Type: "{market_type}". {first_rule}. {excl_str}
 
-Return ONLY a valid JSON array of exactly {n_locs} objects:
-[{{"name":"City","distance_miles":5.2,"market_type":"{market_type}","phase":"{phase}","lat":{lat:.4f},"lon":{lon:.4f}}}]
+Return ONLY a JSON array of {n_locs} objects:
+[{{"name":"City","dist":5.2,"m_type":"{market_type}","ph":"{phase}","lat":{lat:.4f},"lon":{lon:.4f}}}]
 
-Rules: real named places, real GPS coords, sorted by distance ascending, within {radius} miles."""
+Rules: Real places, real GPS, within {radius} miles."""
 
         try:
-            data = self._extract_json(self._call_claude(prompt, max_tokens=4096), "array")
+            # Use a slightly higher max_tokens for large requests
+            response = self._call_claude(prompt, max_tokens=4000)
+            data = self._extract_json(response, "array")
             if data and isinstance(data, list):
-                return data[:n_locs]
+                # Standardize keys if AI used short versions
+                standardized = []
+                for item in data:
+                    standardized.append({
+                        "name": item.get("name"),
+                        "distance_miles": item.get("distance_miles") or item.get("dist", 0.0),
+                        "market_type": item.get("market_type") or item.get("m_type", market_type),
+                        "phase": item.get("phase") or item.get("ph", phase),
+                        "lat": item.get("lat"),
+                        "lon": item.get("lon")
+                    })
+                return standardized[:n_locs]
         except Exception:
             pass
         return []
