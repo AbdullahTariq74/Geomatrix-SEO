@@ -549,7 +549,7 @@ Rules:
         seen: set = set()
         prev_radius = 0
 
-        for i, pc in enumerate(phase_configs):
+        for pc in phase_configs:
             phase      = pc["phase"]
             mtype      = pc["market_type"]
             custom     = pc.get("custom")
@@ -558,15 +558,17 @@ Rules:
             if custom:
                 locs = self._find_custom_locations(lat, lon, city, state, phase, mtype, custom)
             else:
-                if i == 0:
-                    # Phase 1: Backyard core - now scales up to 100 if radius is large
-                    n = min(100, max(30, int((radius or 0) * 0.5)))
-                elif i == 1:
-                    # Phase 2: Regional expansion
-                    n = min(150, max(50, int((radius or 0) * 0.2)))
-                else:
-                    # Phase 3: Nationwide/Authority scale
-                    n = min(300, max(100, int((radius or 0) * 0.1)))
+                # Determine target count based on Phase Name, not index
+                if "Phase 1" in phase:
+                    n = min(100, max(30, int((radius or 0) * 0.8)))
+                elif "Phase 2" in phase:
+                    n = min(150, max(60, int((radius or 0) * 0.4)))
+                else: # Phase 3 or others
+                    # For huge radii, be much more aggressive
+                    if (radius or 0) > 1000:
+                        n = 350
+                    else:
+                        n = min(350, max(100, int((radius or 0) * 0.2)))
                 
                 locs = self._find_ring_locations(
                     lat, lon, city, state, phase, mtype, prev_radius, radius, n, all_locs
