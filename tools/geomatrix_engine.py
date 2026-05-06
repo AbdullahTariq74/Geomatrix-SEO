@@ -195,6 +195,7 @@ class GeomatrixEngine:
         "crown", "bridge", "cleaning", "emergency", "ortho", "about",
         "what-we-do", "what-we-offer", "our-services", "specialty",
         "plumb", "hvac", "roof", "legal", "law", "repair", "install",
+        "contact", "location", "find-us", "directions", "office"
     ]
 
     def _fetch_page(self, url: str, headers: dict) -> str:
@@ -203,7 +204,7 @@ class GeomatrixEngine:
             resp = requests.get(url, headers=headers, timeout=12)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
-            for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
+            for tag in soup(["script", "style", "nav", "aside", "form"]):
                 tag.decompose()
             text = soup.get_text(separator=" ", strip=True)
             return re.sub(r"\s+", " ", text)
@@ -425,7 +426,10 @@ Rules:
                     time.sleep(1)
                     
         # Fallback to AI geocoding if Nominatim fails/blocks
-        fallback_query = f"{address}, {city}, {state}".strip(", ")
+        fallback_query = f"{address}, {city}, {state}".replace("Unknown", "").strip(", ")
+        if not fallback_query or len(fallback_query) < 3:
+            fallback_query = city if city and "Unknown" not in city else address
+            
         if fallback_query and "Unknown" not in fallback_query:
             lat, lon = self._geocode_via_claude(fallback_query)
             if lat and lon:
