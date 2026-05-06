@@ -11,7 +11,13 @@ from dotenv import load_dotenv
 load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tools"))
 
+# Read API key: env var first (local .env), then Streamlit Cloud secrets
 CLAUDE_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+if not CLAUDE_API_KEY:
+    try:
+        CLAUDE_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "")
+    except Exception:
+        pass
 
 st.set_page_config(
     page_title="GeoMatrix SEO Generator",
@@ -126,7 +132,8 @@ with col_title:
     st.title("GeoMatrix SEO Generator")
     st.markdown("<p style='margin-top:-8px;color:#64748b;font-size:15px;'>"
                 "Enter a business website and radius → get a complete local SEO keyword strategy "
-                "and a visual pitch deck in minutes.</p>", unsafe_allow_html=True)
+                "and a visual pitch deck in minutes. "
+                "<span style='color:#94a3b8;font-size:12px;'>v1.1</span></p>", unsafe_allow_html=True)
 
 st.markdown("---")
 

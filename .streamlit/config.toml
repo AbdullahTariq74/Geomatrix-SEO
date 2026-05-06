@@ -1,0 +1,11 @@
+[server]
+maxUploadSize = 50
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[runner]
+# Allow longer runs for nationwide-scale reports
+fastReruns = false

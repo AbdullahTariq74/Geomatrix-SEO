@@ -157,49 +157,30 @@ class GeomatrixEngine:
     def _extract_json(self, text: str, expected_type: str = "object"):
         """Ultra-robust JSON extraction without heavy regex."""
         if not text: return None
-        import json
-        
-        try:
-            # Try to find the bounds manually to avoid regex overhead/backtracking
-            start_char = '[' if expected_type == "array" else '{'
-            end_char = ']' if expected_type == "array" else '}'
-            
-            start_idx = text.find(start_char)
-            end_idx = text.rfind(end_char)
-            
-            if start_idx == -1 or end_idx == -1:
-                return None
-                
-            clean_text = text[start_idx:end_idx+1].strip()
-            
-            try:
-                return json.loads(clean_text)
-            except json.JSONDecodeError:
-                # If it's an array, try to salvage partial data
-                if expected_type == "array":
-                    last_obj_end = clean_text.rfind("}")
-                    if last_obj_end != -1:
-                        try:
-                            return json.loads(clean_text[:last_obj_end+1] + "]")
-                        except: pass
-                return None
-        except Exception:
+
+        start_char = '[' if expected_type == "array" else '{'
+        end_char   = ']' if expected_type == "array" else '}'
+
+        start_idx = text.find(start_char)
+        end_idx   = text.rfind(end_char)
+        if start_idx == -1 or end_idx == -1:
             return None
 
-        # 2. Basic cleanup
-        clean_text = clean_text.strip().replace("```json", "").replace("```", "")
-        
-        # 3. Attempt parse
+        clean_text = text[start_idx:end_idx+1].strip()
+        # Strip markdown code fences if present
+        clean_text = clean_text.replace("```json", "").replace("```", "").strip()
+
         try:
             return json.loads(clean_text)
         except json.JSONDecodeError:
-            # 4. Attempt simple repair for truncated arrays
-            if expected_type == "array" and clean_text.startswith("["):
+            # Salvage truncated arrays by closing at the last complete object
+            if expected_type == "array":
                 last_obj_end = clean_text.rfind("}")
                 if last_obj_end != -1:
-                    repaired = clean_text[:last_obj_end+1] + "]"
-                    try: return json.loads(repaired)
-                    except: pass
+                    try:
+                        return json.loads(clean_text[:last_obj_end+1] + "]")
+                    except Exception:
+                        pass
             return None
 
     def _detect_industry(self, industry_text: str) -> str:
