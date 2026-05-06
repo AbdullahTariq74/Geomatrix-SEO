@@ -279,6 +279,16 @@ if submitted:
                 "Check that the website has an address, or add the city/state in "
                 "the 'Additional Business Details' field."
             )
+            with st.expander("🔍 Diagnostic Details"):
+                st.write("The system attempted to extract the following info but couldn't find coordinates:")
+                st.json({
+                    "Extracted Address": biz.get("address"),
+                    "Extracted City": biz.get("city"),
+                    "Extracted State": biz.get("state"),
+                    "API Key Present": bool(CLAUDE_API_KEY)
+                })
+                if not CLAUDE_API_KEY:
+                    st.warning("⚠️ **Missing API Key:** No ANTHROPIC_API_KEY found in environment variables. AI location fallback is disabled.")
             st.stop()
         progress.progress(50)
 
