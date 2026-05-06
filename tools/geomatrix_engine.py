@@ -629,7 +629,7 @@ Rules:
                 ring_desc = f"between {prev_radius} and {radius} miles from {city}, {state}"
                 first_rule = "Start from the closest unique cities" if not all_found else "Continue with more unique cities"
             
-            excl_list = (exclude or []) + [l["name"] for l in all_found]
+            excl_list = [l["name"] for l in (exclude or [])] + [l["name"] for l in all_found]
             excl_str = f"\nExclude: {', '.join(excl_list[:30])}" if excl_list else ""
             
             prompt = f"""List {current_chunk} cities/towns {ring_desc}.
