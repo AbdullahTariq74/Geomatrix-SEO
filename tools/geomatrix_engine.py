@@ -131,7 +131,7 @@ class GeomatrixEngine:
 
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
-        self.geocoder = Nominatim(user_agent=f"geomatrix_v1_{int(time.time())}", timeout=10)
+        self.geocoder = Nominatim(user_agent="geomatrix_seo_generator_v1_0", timeout=10)
 
     # ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -384,10 +384,38 @@ Rules:
 
     # ─── Step 4: Geocode ─────────────────────────────────────────────────────
 
+    def _geocode_via_claude(self, query: str) -> tuple:
+        prompt = f"Return the approximate latitude and longitude of '{query}' as a JSON object with keys 'lat' and 'lon'. Return ONLY valid JSON (no markdown)."
+        try:
+            data = self._extract_json(self._call_claude(prompt, max_tokens=150), "object")
+            if data and "lat" in data and "lon" in data:
+                return float(data["lat"]), float(data["lon"])
+        except Exception:
+            pass
+        return None, None
+
     def geocode_address(self, city: str, state: str, address: str = "") -> tuple:
-        attempts = [f"{city}, {state}, USA", address, f"{city}, {state}"]
+        city = (city or "").strip()
+        state = (state or "").strip()
+        address = (address or "").strip()
+        
+        attempts = []
+        if address and city and state:
+            attempts.append(f"{address}, {city}, {state}")
+            
+        if city and state:
+            attempts.append(f"{city}, {state}, USA")
+            attempts.append(f"{city}, {state}")
+            
+        if address:
+            attempts.append(address)
+            
+        if city:
+            attempts.append(f"{city}, USA")
+            attempts.append(city)
+            
         for q in attempts:
-            if q and "Unknown" not in q:
+            if q and "Unknown" not in q and q.strip() not in [",", ", USA", ", , USA", "USA"]:
                 try:
                     loc = self.geocoder.geocode(q)
                     if loc:
@@ -395,6 +423,14 @@ Rules:
                     time.sleep(1)
                 except Exception:
                     time.sleep(1)
+                    
+        # Fallback to AI geocoding if Nominatim fails/blocks
+        fallback_query = f"{address}, {city}, {state}".strip(", ")
+        if fallback_query and "Unknown" not in fallback_query:
+            lat, lon = self._geocode_via_claude(fallback_query)
+            if lat and lon:
+                return lat, lon
+                
         return None, None
 
     # ─── Step 5: Find locations ───────────────────────────────────────────────
