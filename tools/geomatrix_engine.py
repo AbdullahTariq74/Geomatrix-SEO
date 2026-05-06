@@ -559,11 +559,11 @@ Rules:
                 locs = self._find_custom_locations(lat, lon, city, state, phase, mtype, custom)
             else:
                 if i == 0:
-                    n = min(80, max(30, int((radius or 0) * 0.8)))
+                    n = min(40, max(20, int((radius or 0) * 0.5)))
                 elif i == 1:
-                    n = min(150, max(60, int((radius or 0) * 0.4)))
+                    n = min(80, max(40, int((radius or 0) * 0.2)))
                 else:
-                    n = min(400, max(120, int((radius or 0) * 0.2)))
+                    n = min(250, max(80, int((radius or 0) * 0.1)))
                 
                 locs = self._find_ring_locations(
                     lat, lon, city, state, phase, mtype, prev_radius, radius, n, all_locs
