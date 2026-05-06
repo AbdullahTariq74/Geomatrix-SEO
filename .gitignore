@@ -40,3 +40,5 @@ ehthumbs.db
 .idea/
 *.swp
 *.swo
+# Added by code-review-graph
+.code-review-graph/
