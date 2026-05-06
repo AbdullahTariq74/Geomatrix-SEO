@@ -612,48 +612,57 @@ Rules:
 
         return all_locs
 
-    def _find_ring_locations(self, lat, lon, city, state, phase, market_type,
-                              prev_radius, radius, n_locs, existing_locs):
-        if prev_radius == 0:
-            ring_desc  = f"within {radius} miles of {city}, {state}"
-            first_rule = f'First entry MUST be "{city}" at 0.0 miles'
-        else:
-            ring_desc  = f"between {prev_radius} and {radius} miles from {city}, {state}"
-            first_rule = f"All entries should be beyond {prev_radius} miles from {city}"
-
-        exclude    = [l["name"] for l in existing_locs]
-        excl_str   = (f"\nExclude (already in earlier phase): {', '.join(exclude[:25])}"
-                      if exclude else "")
-
-        prompt = f"""List {n_locs} cities/towns {ring_desc}.
+    def _find_ring_locations(self, lat, lon, city, state, phase, market_type, prev_radius, radius, n_locs, exclude=None):
+        if n_locs <= 0: return []
+        
+        # Split large requests into chunks of 90 to avoid AI token limits
+        chunk_size = 90
+        all_found = []
+        needed = n_locs
+        
+        while needed > 0:
+            current_chunk = min(needed, chunk_size)
+            if prev_radius == 0 and not all_found:
+                ring_desc = f"within {radius} miles of {city}, {state}"
+                first_rule = f'First entry MUST be "{city}" at 0.0 miles'
+            else:
+                ring_desc = f"between {prev_radius} and {radius} miles from {city}, {state}"
+                first_rule = "Start from the closest unique cities" if not all_found else "Continue with more unique cities"
+            
+            excl_list = (exclude or []) + [l["name"] for l in all_found]
+            excl_str = f"\nExclude: {', '.join(excl_list[:30])}" if excl_list else ""
+            
+            prompt = f"""List {current_chunk} cities/towns {ring_desc}.
 Phase: "{phase}", Type: "{market_type}". {first_rule}. {excl_str}
 
-Return ONLY a JSON array of {n_locs} objects:
+Return ONLY a JSON array of {current_chunk} objects:
 [{{"name":"City","dist":5.2,"m_type":"{market_type}","ph":"{phase}","lat":{lat:.4f},"lon":{lon:.4f}}}]
 
 Rules: Real places, real GPS, within {radius} miles."""
 
-        try:
-            response = self._call_claude(prompt, max_tokens=4000)
-            data = self._extract_json(response, "array")
-            if data and isinstance(data, list):
-                standardized = []
-                for item in data:
-                    standardized.append({
-                        "name": item.get("name"),
-                        "distance_miles": item.get("distance_miles") or item.get("dist", 0.0),
-                        "market_type": item.get("market_type") or item.get("m_type", market_type),
-                        "phase": item.get("phase") or item.get("ph", phase),
-                        "lat": item.get("lat"),
-                        "lon": item.get("lon")
-                    })
-                return standardized[:n_locs]
-            else:
-                self.last_error = f"AI provided invalid data format for {phase}. Response length: {len(response)}"
-        except Exception as e:
-            self.last_error = f"AI Error in {phase}: {str(e)}"
-            pass
-        return []
+            try:
+                response = self._call_claude(prompt, max_tokens=4000)
+                data = self._extract_json(response, "array")
+                if data and isinstance(data, list):
+                    for item in data:
+                        all_found.append({
+                            "name": item.get("name"),
+                            "distance_miles": item.get("distance_miles") or item.get("dist", 0.0),
+                            "market_type": item.get("market_type") or item.get("m_type", market_type),
+                            "phase": item.get("phase") or item.get("ph", phase),
+                            "lat": item.get("lat"),
+                            "lon": item.get("lon")
+                        })
+                    needed -= len(data)
+                    if len(data) == 0: break # Avoid infinite loop
+                else:
+                    self.last_error = f"AI Chunk Failed for {phase}. Length: {len(response)}"
+                    break
+            except Exception as e:
+                self.last_error = f"AI Error in chunk: {str(e)}"
+                break
+        
+        return all_found[:n_locs]
 
     def _find_custom_locations(self, lat, lon, city, state, phase, market_type, custom_desc):
         prompt = f"""A business is based in {city}, {state}.
