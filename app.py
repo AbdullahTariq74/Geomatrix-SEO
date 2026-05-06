@@ -208,10 +208,17 @@ with st.form("main_form"):
 # ── Run pipeline only when form is freshly submitted ─────────────────────────
 if submitted:
     errors = []
-    if not website:       errors.append("Website URL is required.")
-    if not business_name: errors.append("Business Name is required.")
+    if not website or "." not in website: 
+        errors.append("Please enter a valid Website URL.")
+    if not business_name or len(business_name) < 2: 
+        errors.append("Please enter a valid Business Name.")
     if not CLAUDE_API_KEY:
-        errors.append("No API key found. Make sure the .env file contains ANTHROPIC_API_KEY.")
+        errors.append("No API key found. Make sure the 'ANTHROPIC_API_KEY' is set in Streamlit Secrets.")
+
+    if errors:
+        for err in errors:
+            st.error(f"⚠️ {err}")
+        st.stop()
 
     # Build phase configuration from form inputs
     _ph3_custom = (ph3_custom or "").strip()
