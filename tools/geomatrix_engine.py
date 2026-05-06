@@ -132,6 +132,7 @@ class GeomatrixEngine:
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
         self.geocoder = Nominatim(user_agent="geomatrix_seo_generator_v1_0", timeout=10)
+        self.last_error = None  # Track errors to show in the UI
 
     # ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -154,27 +155,36 @@ class GeomatrixEngine:
         return ""
 
     def _extract_json(self, text: str, expected_type: str = "object"):
-        """Extract and repair JSON from AI response."""
+        """Ultra-robust JSON extraction without heavy regex."""
         if not text: return None
-        import re, json
+        import json
         
-        # 1. Try to find JSON block
-        if expected_type == "array":
-            pattern = r'\[\s*\{.*\}\s*\]'
-        else:
-            pattern = r'\{\s*".*":.*\}'
+        try:
+            # Try to find the bounds manually to avoid regex overhead/backtracking
+            start_char = '[' if expected_type == "array" else '{'
+            end_char = ']' if expected_type == "array" else '}'
             
-        match = re.search(pattern, text, re.DOTALL)
-        if match:
-            clean_text = match.group(0)
-        else:
-            # Fallback: find first [ or { and last ] or }
-            start = text.find('[' if expected_type == "array" else '{')
-            end = text.rfind(']' if expected_type == "array" else '}')
-            if start != -1 and end != -1:
-                clean_text = text[start:end+1]
-            else:
-                clean_text = text
+            start_idx = text.find(start_char)
+            end_idx = text.rfind(end_char)
+            
+            if start_idx == -1 or end_idx == -1:
+                return None
+                
+            clean_text = text[start_idx:end_idx+1].strip()
+            
+            try:
+                return json.loads(clean_text)
+            except json.JSONDecodeError:
+                # If it's an array, try to salvage partial data
+                if expected_type == "array":
+                    last_obj_end = clean_text.rfind("}")
+                    if last_obj_end != -1:
+                        try:
+                            return json.loads(clean_text[:last_obj_end+1] + "]")
+                        except: pass
+                return None
+        except Exception:
+            return None
 
         # 2. Basic cleanup
         clean_text = clean_text.strip().replace("```json", "").replace("```", "")
@@ -624,11 +634,9 @@ Return ONLY a JSON array of {n_locs} objects:
 Rules: Real places, real GPS, within {radius} miles."""
 
         try:
-            # Use a slightly higher max_tokens for large requests
             response = self._call_claude(prompt, max_tokens=4000)
             data = self._extract_json(response, "array")
             if data and isinstance(data, list):
-                # Standardize keys if AI used short versions
                 standardized = []
                 for item in data:
                     standardized.append({
@@ -640,7 +648,10 @@ Rules: Real places, real GPS, within {radius} miles."""
                         "lon": item.get("lon")
                     })
                 return standardized[:n_locs]
-        except Exception:
+            else:
+                self.last_error = f"AI provided invalid data format for {phase}. Response length: {len(response)}"
+        except Exception as e:
+            self.last_error = f"AI Error in {phase}: {str(e)}"
             pass
         return []
 

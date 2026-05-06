@@ -305,6 +305,10 @@ if submitted:
         locations = engine.find_locations_by_phases(
             lat, lon, biz.get("city", ""), biz.get("state", ""), phase_configs
         )
+        if not locations:
+            err_msg = engine.last_error if engine.last_error else "AI could not find any locations for this radius. Try a smaller radius or check your API key."
+            status.error(f"❌ Location Finding Failed: {err_msg}")
+            st.stop()
         progress.progress(62)
 
         status.info("📊  Building GeoMatrix keyword data…")
